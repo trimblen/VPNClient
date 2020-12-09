@@ -7,6 +7,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.util.Properties;
 
 import static javax.swing.JOptionPane.showMessageDialog;
 
@@ -32,8 +33,8 @@ public class MiscSingleton {
 
         lock = channel.tryLock();
         if (lock == null) {
-            lock.release();
-            channel.close();
+            //lock.release();
+            //channel.close();
             return true;
         }
         Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -50,7 +51,6 @@ public class MiscSingleton {
     }
 
     public void DeleteAllConnections(){
-
         String HostName = "PCDefault";
 
         try {
@@ -85,16 +85,19 @@ public class MiscSingleton {
         } catch (Exception e){
             showMessageDialog(null, e.getMessage());
         };
-
-        ;
-
     };
 
     // getters and setters
     public String GetVPNConnData() throws IOException {
-
         // curl_init and url
-        URL url = new URL("http://45.32.15.97/api/country");
+        Properties ApiProps = GetApiProps();
+        String StringURL    = "";
+
+        if (!ApiProps.getProperty("app.apipath").isEmpty()) {
+            StringURL = ApiProps.getProperty("app.apipath");
+        };
+
+        URL url = new URL(StringURL);
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
         //  CURLOPT_POST
@@ -134,6 +137,78 @@ public class MiscSingleton {
         input.close();
 
         return resultBuf.toString();
+    };
+
+    // getters and setters
+    public String GetImageData() throws IOException {
+        // curl_init and url
+        Properties ApiProps = GetApiProps();
+        String StringURL    = "";
+
+        if (!ApiProps.getProperty("app.imagepath").isEmpty()) {
+            StringURL = ApiProps.getProperty("app.imagepath");
+        };
+
+        URL url = new URL(StringURL);
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+
+        //  CURLOPT_POST
+        con.setRequestMethod("POST");
+
+        // CURLOPT_FOLLOWLOCATION
+        con.setInstanceFollowRedirects(true);
+
+        String postData = "my_data_for_posting";
+        con.setRequestProperty("Content-length", String.valueOf(postData.length()));
+
+        con.setDoOutput(true);
+        con.setDoInput(true);
+
+        DataOutputStream output = new DataOutputStream(con.getOutputStream());
+
+        output.writeBytes(postData);
+
+        output.close();
+
+        // "Post data send ... waiting for reply");
+        int code = con.getResponseCode(); // 200 = HTTP_OK
+        System.out.println("Response    (Code):" + code);
+        System.out.println("Response (Message):" + con.getResponseMessage());
+
+        // read the response
+        DataInputStream input = new DataInputStream(con.getInputStream());
+
+        int c;
+
+        StringBuilder resultBuf = new StringBuilder();
+
+        while ( (c = input.read()) != -1) {
+            resultBuf.append((char) c);
+        };
+
+        input.close();
+
+        return resultBuf.toString();
+    };
+
+    private Properties GetApiProps(){
+        Properties prop = new Properties();
+        String fileName = "app.config";
+        InputStream is = null;
+
+        try {
+            is = new FileInputStream(fileName);
+        } catch (FileNotFoundException ex) {
+            showMessageDialog(null, ex.getMessage());
+        };
+
+        try {
+            prop.load(is);
+        } catch (IOException ex) {
+            showMessageDialog(null, ex.getMessage());
+        };
+
+        return prop;
     };
 
     public void ExecutePowerShellCommand(String CommandsToExecute) throws IOException, InterruptedException {

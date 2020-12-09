@@ -1,5 +1,7 @@
 package com.vpnclient;
 
+import chrriis.dj.nativeswing.common.UIUtils;
+import chrriis.dj.nativeswing.swtimpl.NativeInterface;
 import com.sun.jna.platform.win32.Rasapi32Util;
 import com.sun.jna.platform.win32.WinNT;
 import org.json.JSONArray;
@@ -14,35 +16,46 @@ import java.awt.event.MouseEvent;
 import java.net.InetAddress;
 import java.net.URL;
 import java.net.UnknownHostException;
-import java.time.LocalDate;
 
 import static javax.swing.JOptionPane.showMessageDialog;
 
 
 public class ClientGUI extends JFrame {
-    private JButton buttConn;
     private JPanel panel1;
-    private JComboBox VPNSelector;
-    private JLabel About;
-    private Rasapi32 Win32Lib = Rasapi32.INSTANCE;
+    private  JComboBox VPNSelector;
+    private  JLabel About;
+    private  JLabel ConnectLabel;
+    private JLabel LabelStatus;
+    private  JLabel labelVisitSite;
+    private  JLabel ShareLabel;
+    private  JLabel HelpLabel;
+    private  JLabel WebSiteMapLabel;
+    private  JLabel CountUsLabel;
+    private JPanel rightpanel;
+    private Rasapi32 Win32Lib                   = Rasapi32.INSTANCE;
     private WinNT.HANDLE hrasConn;
     public static final String APPLICATION_NAME = "VPNClient";
-    public static final String ICON_STR = "/images/icon32x32.png";
+    public static final String ICON_STR         = "/images/icon32x32.png";
     private TrayIcon[] Arrtray;
-    String HostName;
+    private String HostName;
+    private String imageUrl;
 
     public ClientGUI(VPNConnector vpnConn) {
         setContentPane(panel1);
         setVisible(true);
 
         setResizable(false);
-        Dimension screenSize = new Dimension(800, 600);
+        Dimension screenSize = new Dimension(1024, 768);
 
         setPreferredSize(screenSize);
         setMinimumSize(screenSize);
         setMaximumSize(screenSize);
 
+        this.setIconImage(new ImageIcon(getClass().getResource("/images/icon32x32.png")).getImage());
+
         setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
+
+       // repaint();
 
         VPNPreferences VPNPrefs     = new VPNPreferences();
         MiscSingleton MSingleton    = MiscSingleton.getInstance();
@@ -55,28 +68,63 @@ public class ClientGUI extends JFrame {
                 JSONArray SettingsArr = VPNObj.getJSONArray("result");
                 if (SettingsArr.length()>0) {
                     for (int i = 0; i < SettingsArr.length(); i++) {
-                        JSONObject VPNObject = (JSONObject) SettingsArr.get(i);
+                        JSONObject VPNObject    = (JSONObject) SettingsArr.get(i);
+
                         VPNSelector.addItem(new VPNItem(Integer.valueOf(String.valueOf(VPNObject.get("countryId"))), String.valueOf(VPNObject.get("name"))));
 
                         VPNPrefs.deletePreference(String.valueOf(VPNObject.get("countryId")));
                         VPNPrefs.setPreference(String.valueOf(VPNObject.get("countryId")), SettingsArr.get(i).toString());
-                    }
+                    };
                 }else{
-                    showMessageDialog(null, "No settings data is available!");
+                         showMessageDialog(null, "No settings data is available!");
                     return;
                 }
             } else {
-                showMessageDialog(null, "No settings data is available!");
+                    showMessageDialog(null, "No settings data is available!");
                 return;
             };
         } catch (Exception e){
-             showMessageDialog(null, e.getMessage());
+              showMessageDialog(null, e.getMessage());
         };
 
-        buttConn.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
+        try{
+            String JsonImgVPN       = MSingleton.GetImageData();
+            JSONObject ImgObj       = new JSONObject(JsonImgVPN);
 
+            if (ImgObj.getBoolean("success")) {
+                JSONArray ImgArr = ImgObj.getJSONArray("result");
+                if (ImgArr.length() > 0) {
+                    JSONObject ImageObject = (JSONObject) ImgArr.get(0);
+
+                    String[] StrImg = String.valueOf(ImageObject.get("image")).split("/");
+                    if (StrImg.length > 0) {
+                        String StrImagePath = StrImg[StrImg.length - 1];
+                        String TmpImagePth = MSingleton.downloadFromUrl((String) ImageObject.get("image"), StrImagePath);
+
+                        ImageIcon icon = new ImageIcon(TmpImagePth);
+                        Image img = icon.getImage();
+                        Image newimg = img.getScaledInstance(About.getWidth(), About.getHeight(), java.awt.Image.SCALE_SMOOTH);
+                        icon = new ImageIcon(newimg);
+
+                        About.setIcon(icon);
+                        About.setText(null);
+                    };
+
+                    //probably without https
+                    if (String.valueOf(ImageObject.get("link")).contains("https://")) {
+                        imageUrl = String.valueOf(ImageObject.get("link"));
+                    } else {
+                        imageUrl = "https://" + String.valueOf(ImageObject.get("link"));
+                    };
+                };
+            };
+        } catch (Exception exp){
+            showMessageDialog(null, exp.getMessage());
+        };
+
+        ConnectLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
                 VPNItem VPNSelected = (VPNItem) VPNSelector.getSelectedItem();
                 String ConnString   = VPNPrefs.getPreference(String.valueOf(VPNSelected.getCountryId()));
                 JSONObject VPNData  = new JSONObject(ConnString);
@@ -95,53 +143,138 @@ public class ClientGUI extends JFrame {
 
                 vpnConn.createConn(VPNData, EntryName);
 
-                VPNStatus VPNConnStatus = new VPNStatus(buttConn, vpnConn);
+                VPNStatus VPNConnStatus = new VPNStatus(LabelStatus, vpnConn, VPNSelected.getCountry(), VPNSelector);
                 SystemTray tray         = SystemTray.getSystemTray();
 
-               if (!vpnConn.connState) {
+                if (!vpnConn.connState) {
+                    SetLabelIcon(ConnectLabel, "/images/connecting.png");
+                    LabelStatus.setText(VPNSelected.getCountry() + ": 正在连接…");
                     try{
+
                         hrasConn                = vpnConn.Connect(EntryName);
                         VPNConnStatus.VPNConn   = hrasConn;
                         vpnConn.connState       = true;
 
                         VPNConnStatus.start();
-
-                        showMessageDialog(null,"Connection was established!");
+                        LabelStatus.setText(VPNSelected.getCountry() + ": 连接中");
+                       // showMessageDialog(null,"Connection was established!");
+                        VPNSelector.setEnabled(false);
                     } catch (Rasapi32Util.Ras32Exception ex) {
                         vpnConn.connState = false;
+
                         showMessageDialog(null, ex.getMessage());
+                        VPNSelector.setEnabled(true);
+                        LabelStatus.setText("");
+
                         return;
                     };
 
                     if (vpnConn.connState){
-                        buttConn.setText("Disconnect");
+                        SetLabelIcon(ConnectLabel, "/images/disconnect.png");
+                        LabelStatus.setText(VPNSelected.getCountry() + ": 已连接");
+                        VPNSelector.setEnabled(false);
+                    }else{
+                        SetLabelIcon(ConnectLabel, "/images/clicktoconnect.png");
+                        LabelStatus.setText(VPNSelected.getCountry() + ": 已断开");
+                        VPNSelector.setEnabled(true);
                     };
                 }else{
-                   vpnConn.Disconnect(hrasConn);
+                    LabelStatus.setText(VPNSelected.getCountry() + ": 正在断开…");
+                    if (!VPNConnStatus.isInterrupted()){
+                        vpnConn.connState = false;
+                        VPNConnStatus.interrupt();
+                    };
 
-                   if (!VPNConnStatus.isInterrupted()){
-                       VPNConnStatus.interrupt();
-                   };
-
-                   buttConn.setText("Connect");
-
-                   showMessageDialog(null,"Connection was closed!");
+                    try{
+                        vpnConn.Disconnect(hrasConn);
+                        SetLabelIcon(ConnectLabel, "/images/clicktoconnect.png");
+                        //showMessageDialog(null,"Connection was closed!");
+                        LabelStatus.setText(VPNSelected.getCountry() + ": 已断开");
+                        VPNSelector.setEnabled(true);
+                    }catch (Rasapi32Util.Ras32Exception ex) {
+                        if (VPNConnStatus.isInterrupted()){
+                            vpnConn.connState = true;
+                            VPNConnStatus.start();
+                        };
+                        showMessageDialog(null, ex.getMessage());
+                        SetLabelIcon(ConnectLabel, "/images/disconnect.png");
+                        LabelStatus.setText(VPNSelected.getCountry() + ": 已连接");
+                        VPNSelector.setEnabled(false);
+                    };
                 };
             };
         });
 
+        //about button action listeners
         About.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+
+
+                About.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
                 try {
-                    Desktop.getDesktop().browse(new URL("http://www.youtube.com/watch?v=Vr6wPsVFa1E").toURI());
+                    Desktop.getDesktop().browse(new URL(imageUrl).toURI());
                 } catch (Exception esx) {
                     showMessageDialog(null, esx.getMessage());
                 };
             };
         });
 
-        About.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        //side buttons action listeners
+        labelVisitSite.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URL("http://www.17vpn.xyz").toURI());
+                } catch (Exception esx) {
+                    showMessageDialog(null, esx.getMessage());
+                };
+            };
+        });
+
+        ShareLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URL("http://www.17vpn.xyz/resource/index.php").toURI());
+                } catch (Exception esx) {
+                    showMessageDialog(null, esx.getMessage());
+                };
+            };
+        });
+
+        HelpLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URL("http://www.17vpn.xyz/blog/help.php").toURI());
+                } catch (Exception esx) {
+                    showMessageDialog(null, esx.getMessage());
+                };
+            };
+        });
+
+        CountUsLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URL("http://www.17vpn.xyz/blog/us.php").toURI());
+                } catch (Exception esx) {
+                    showMessageDialog(null, esx.getMessage());
+                };
+            };
+        });
+
+        WebSiteMapLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                try {
+                    Desktop.getDesktop().browse(new URL("http://www.17vpn.xyz/link/index.php").toURI());
+                } catch (Exception esx) {
+                    showMessageDialog(null, esx.getMessage());
+                };
+            };
+        });
 
         setTrayIcon(this,vpnConn);
     };
@@ -195,14 +328,45 @@ public class ClientGUI extends JFrame {
                 TrayIcon.MessageType.INFO);
     };
 
-    public static void main(String[] args) throws Exception {
-        LocalDate localDate = LocalDate.now();
-        LocalDate endDate   = LocalDate.of(2020, 12, 31);
+    private void SetLabelIcon(JLabel LabelName, String IcoPath){
+        URL imageURL        = ClientGUI.class.getResource(IcoPath);
+        ImageIcon icon      = createImageIcon(IcoPath);
 
-        if (localDate.equals(endDate)){
-            showMessageDialog(null, "Trial period has expired!");
-            System.exit(1);
-        };
+        if(icon != null){
+            Image img = icon.getImage();
+            Image newimg = img.getScaledInstance(LabelName.getWidth(), LabelName.getHeight(),  java.awt.Image.SCALE_SMOOTH);
+            icon = new ImageIcon(newimg);
+            LabelName.setIcon(icon);
+            LabelName.setText(null);
+        }
+        else{
+            LabelName.setText("Image not found");
+            LabelName.setIcon(null);
+        }
+    };
+
+    protected static ImageIcon createImageIcon(String path) {
+        URL imgURL;
+        imgURL = ClientGUI.class.getResource(path);
+        if (imgURL != null) {
+            return new ImageIcon(imgURL);
+        } else {
+            return null;
+        }
+    };
+
+    public static void main(String[] args) throws Exception {
+        NativeInterface.initialize();
+        UIUtils.setPreferredLookAndFeel();
+        NativeInterface.open();
+
+//        LocalDate localDate = LocalDate.now();
+//        LocalDate endDate   = LocalDate.of(2020, 12, 31);
+//
+//        if (localDate.compareTo(endDate)>0){
+//           showMessageDialog(null, "Trial period has expired!");
+//            System.exit(1);
+//        };
 
         MiscSingleton MS = MiscSingleton.getInstance();
 
@@ -215,10 +379,15 @@ public class ClientGUI extends JFrame {
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
-                    VPNConnector vpc = new VPNConnector();
-                    new ClientGUI(vpc);
-                }
+                    VPNConnector vpc    = new VPNConnector();
+                    JFrame GUIClient    = new ClientGUI(vpc);
+
+                    GUIClient.setTitle("VPNClient");
+                    GUIClient.pack();
+                    GUIClient.setLocationRelativeTo(null);
+                };
             });
-        }
+        };
+        NativeInterface.runEventPump();
     };
 }

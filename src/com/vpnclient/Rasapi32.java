@@ -20,6 +20,7 @@ public interface Rasapi32 extends StdCallLibrary {
     int RasSetCredentials(String lpszPhonebook, String lpszEntry, WinRas.RASCREDENTIALS.ByReference lpCredentials, Boolean fClearCredentials);
     int RasDial(WinRas.RASDIALEXTENSIONS.ByReference lpRasDialExtensions, String lpszPhonebook, WinRas.RASDIALPARAMS.ByReference lpRasDialParams, Integer dwNotifierType, WinRas.RasDialFunc2 lpvNotifier, WinNT.HANDLEByReference lphRasConn);
     int RasHangUp(WinNT.HANDLE hrasconn);
+    int RasGetErrorString(int uErrorValue, char[] lpszErrorString, int cBufSize);
     int RasGetEntryProperties(String lpszPhonebook, String lpszEntry, WinRas.RASENTRY.ByReference lpRasEntry, IntByReference lpdwEntryInfoSize, Pointer lpbDeviceInfo, Pointer lpdwDeviceInfoSize);
     int RasSetEntryProperties(String lpszPhonebook, String lpszEntry, WinRas.RASENTRY.ByReference lpRasEntry, Integer dwEntryInfoSize, byte[] lpbDeviceInfo, Integer dwDeviceInfoSize);
     int RasGetEntryDialParams(String lpszPhonebook, WinRas.RASDIALPARAMS.ByReference lprasdialparams, WinDef.BOOLByReference lpfPassword);
